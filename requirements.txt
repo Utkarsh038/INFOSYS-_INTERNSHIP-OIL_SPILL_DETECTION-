@@ -1,0 +1,15 @@
+streamlit
+numpy
+opencv-python
+tensorflow
+pillow
+h5py
+pyngrok
+fastapi
+uvicorn
+requests
+sqlalchemy
+psycopg2-binary
+python-dotenv
+passlib[bcrypt]
+python-jose

@@ -1,0 +1,52 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Env and secrets
+.env
+*.env
+.env.*
+
+# Model files and large binaries
+*.h5
+*.hdf5
+*.ckpt
+*.pth
+models/
+weights/
+
+# Jupyter
+.ipynb_checkpoints
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
+
+# pytest
+.pytest_cache/

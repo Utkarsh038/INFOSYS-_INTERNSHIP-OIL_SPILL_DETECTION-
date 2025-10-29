@@ -1,0 +1,136 @@
+# Streamlit Application Plan: Oil Spill Detection
+
+This document outlines the plan for building a Streamlit web application to detect and segment oil spills using a pre-trained TensorFlow model. The plan incorporates user authentication and a database to store past results.
+
+## Frontend Part (The "Look and Feel") 🎨
+
+This component covers everything the user sees and interacts with, built using Streamlit's UI elements.
+
+### 1. Login/Sign Up Page
+* **Purpose:** Secure access and user identification.
+* **Layout:** Simple, centered layout, no sidebar initially.
+* **Elements:**
+    * Title: "🌊 Oil Spill Detection & Segmentation"
+    * Tabs: "Login" and "Sign Up"
+    * **Login Tab:**
+        * Text Input: "Username"
+        * Password Input: "Password" (masked)
+        * Button: "Login"
+    * **Sign Up Tab:**
+        * Text Input: "Choose a Username"
+        * Password Input: "Choose a Password"
+        * Button: "Sign Up"
+    * Message Area: For feedback (e.g., "Login successful", "Username taken").
+
+### 2. Main Application Layout (Post-Login)
+* **Layout:** Wide layout with a persistent sidebar for navigation.
+* **Sidebar Elements:**
+    * Welcome message: "Welcome, \[Username]!"
+    * Page Navigation (Radio Buttons):
+        * "Image Analyzer"
+        * "My Past Results"
+    * Logout Button.
+* **Main Content Area:** Dynamically updates based on sidebar page selection.
+
+### 3. "Image Analyzer" Page UI
+* **Purpose:** Allow users to upload images and see model predictions interactively.
+* **Sidebar Elements (below navigation):**
+    * File Uploader: "Choose an image..." (accepts jpg, jpeg, png)
+    * Slider: "Confidence Threshold" (0.0 to 1.0, default 0.5)
+    * Slider: "Overlay Opacity" (0.0 to 1.0, default 0.4)
+* **Main Area Elements:**
+    * Two-Column Layout (`st.columns`)
+    * **Left Column:**
+        * Header: "Original Image"
+        * Image Display (`st.image`): Shows the uploaded image.
+    * **Right Column:**
+        * Header: "Prediction Overlay"
+        * Image Display (`st.image`): Shows the original image with the red segmentation mask overlaid. Updates in real-time based on sliders.
+    * Spinner (`st.spinner`): Displays "Analyzing image..." during processing.
+    * **Below Columns (Analysis Results Section):**
+        * Header: "Analysis Results"
+        * Metric Display (`st.metric`): Shows "Spill Coverage" percentage.
+        * Conditional Alert Box (`st.success` / `st.warning`): Indicates if a spill was detected.
+        * Download Button (`st.download_button`): Allows saving the overlay image.
+
+### 4. "My Past Results" Page UI
+* **Purpose:** Allow users to review their previous analyses.
+* **Main Area Elements:**
+    * Header: "My Past Results"
+    * Grid Layout: Displays multiple "result cards".
+    * **Each Result Card (`st.expander`):**
+        * Displays: Thumbnail of original image, analysis timestamp, spill percentage.
+        * **Expanded View (on click):** Shows the full-size original and overlay images side-by-side, plus the download button for that specific result.
+
+## Backend Part (The "Engine") ⚙️
+
+This component includes the server-side logic, model handling, and data processing.
+
+### 1. User Authentication & Session Management
+* **Authentication Logic:**
+    * Validates username/password against the database (Login).
+    * Hashes passwords and creates new user records (Sign Up).
+* **Session State (`st.session_state`):**
+    * Stores the logged-in user's ID and username.
+    * Manages login status to control access to main app pages.
+    * Clears on logout.
+
+### 2. Model Handling
+* **Model Loading (`@st.cache_resource`):**
+    * Loads the `final_oil_spill_model (2).h5` TensorFlow/Keras model once when the app starts.
+    * Handles model compilation (can use a simple loss like `binary_crossentropy` for inference).
+
+### 3. ML Inference Pipeline
+* **Image Preprocessing Function:**
+    * Accepts uploaded image (PIL format).
+    * Converts to RGB.
+    * Resizes to the model's expected input (256x256 pixels).
+    * Normalizes pixel values (e.g., divides by 255.0).
+    * Adds a batch dimension.
+    * Returns the processed NumPy array.
+* **Prediction Function:**
+    * Takes the preprocessed image array and the loaded model.
+    * Runs `model.predict()`.
+    * Removes the batch dimension from the output mask.
+    * Returns the raw prediction mask (256x256x1).
+* **Overlay Generation Function:**
+    * Takes the original PIL image, the raw mask, the confidence threshold (from slider), and opacity (from slider).
+    * Resizes the original image to 256x256.
+    * Applies the threshold to the mask to create a binary mask.
+    * Creates a colored (red) version of the binary mask.
+    * Uses OpenCV (`cv2.addWeighted`) to blend the resized original image and the colored mask using the specified opacity.
+    * Returns the final overlay image (NumPy array) and the binary mask.
+
+### 4. Business Logic & Database Interfacing
+* **Spill Calculation:** Calculates the percentage of pixels classified as spill based on the binary mask.
+* **Database Write Function:**
+    * Connects to the database.
+    * Takes user ID, current timestamp, spill percentage, original image bytes, and overlay image bytes.
+    * Inserts a new record into the `analyses` table.
+* **Database Read Function:**
+    * Connects to the database.
+    * Takes user ID.
+    * Queries the `analyses` table for all records matching the user ID, ordered by timestamp (newest first).
+    * Returns a list of results (e.g., list of dictionaries or objects containing ID, timestamp, percentage, image blobs).
+
+## Database Part (The "Memory") 🗄️
+
+This component defines the structure for storing persistent user and analysis data. (e.g., SQLite, PostgreSQL).
+
+### 1. `users` Table
+* **Purpose:** Store user login credentials securely.
+* **Columns:**
+    * `user_id`: Integer, Primary Key, Auto-incrementing.
+    * `username`: Text, Unique, Not Null.
+    * `password_hash`: Text, Not Null (Stores the result of a hashing function like bcrypt).
+
+### 2. `analyses` Table
+* **Purpose:** Store the results of each image analysis performed by users.
+* **Columns:**
+    * `analysis_id`: Integer, Primary Key, Auto-incrementing.
+    * `user_id`: Integer, Foreign Key (references `users.user_id`), Not Null.
+    * `timestamp`: Datetime, Not Null (Timestamp of when the analysis was run).
+    * `spill_percentage`: Float or Real, Not Null.
+    * `original_image_blob`: BLOB (Binary Large Object), Not Null (Stores the binary data of the uploaded image).
+    * `overlay_image_blob`: BLOB, Not Null (Stores the binary data of the generated overlay image).
+    * *(Optional)* `original_filename`: Text (To display the original filename if desired).
