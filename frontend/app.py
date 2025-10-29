@@ -15,11 +15,7 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 
 def safe_rerun():
-    """Try to rerun the Streamlit app in a way that works across versions.
-
-    - Prefer st.experimental_rerun() when available.
-    - Otherwise update query params (which triggers a rerun), or toggle a session flag.
-    """
+    
     try:
         if hasattr(st, "experimental_rerun"):
             st.experimental_rerun()

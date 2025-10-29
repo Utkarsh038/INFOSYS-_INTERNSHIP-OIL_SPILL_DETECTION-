@@ -13,3 +13,6 @@ psycopg2-binary
 python-dotenv
 passlib[bcrypt]
 python-jose
+streamlit-lottie
+streamlit-image-comparison
+reportlab
