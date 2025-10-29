@@ -13,6 +13,8 @@ from PIL import Image
 
 import backend.model_utils as model_utils
 import backend.db as db
+import numpy as np
+import cv2
 
 load_dotenv()
 
@@ -104,6 +106,47 @@ def analyze(file: UploadFile = File(...), threshold: float = Form(0.5), opacity:
     overlay_pil.save(overlay_bytes, format="PNG")
     overlay_data = overlay_bytes.getvalue()
 
+    # Additional visualizations: predicted mask heatmap, binary mask, and contours overlay
+    try:
+        # predicted mask heatmap
+        pred_resized = cv2.resize(pred_mask, overlay_pil.size, interpolation=cv2.INTER_LINEAR)
+        pred_u8 = (np.clip(pred_resized, 0.0, 1.0) * 255.0).astype(np.uint8)
+        heat = cv2.applyColorMap(pred_u8, cv2.COLORMAP_JET)
+        heat_pil = Image.fromarray(cv2.cvtColor(heat, cv2.COLOR_BGR2RGB))
+
+        # binary mask (already computed in model_utils.generate_overlay as binary_pil)
+        binary_bytes = io.BytesIO()
+        binary_pil.save(binary_bytes, format="PNG")
+        binary_data = binary_bytes.getvalue()
+
+        # contours overlay: draw contours on the resized original
+        orig_resized = overlay_pil.convert("RGB")
+        orig_np = np.array(orig_resized)
+        # binary array for contours
+        bin_np = np.array(binary_pil)
+        # ensure single channel binary
+        if bin_np.ndim == 3:
+            bin_np = cv2.cvtColor(bin_np, cv2.COLOR_BGR2GRAY)
+        contours, _ = cv2.findContours((bin_np > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cont_img = orig_np.copy()
+        cv2.drawContours(cont_img, contours, -1, (0, 255, 0), 2)
+        contours_pil = Image.fromarray(cont_img)
+
+        # convert heatmap and contours to bytes
+        heat_bytes = io.BytesIO()
+        heat_pil.save(heat_bytes, format="PNG")
+        heat_data = heat_bytes.getvalue()
+
+        contours_bytes = io.BytesIO()
+        contours_pil.save(contours_bytes, format="PNG")
+        contours_data = contours_bytes.getvalue()
+    except Exception as e:
+        # If any visualization fails, don't block the main result — log and continue without extras
+        print(f"[DEBUG] Extra visuals generation failed: {e}")
+        heat_data = None
+        binary_data = None
+        contours_data = None
+
     # Save analysis to DB
     try:
         analysis_id = db.save_analysis(user_id=current_user["user_id"], spill_percentage=spill_pct, original_bytes=contents, overlay_bytes=overlay_data, filename=file.filename)
@@ -114,6 +157,9 @@ def analyze(file: UploadFile = File(...), threshold: float = Form(0.5), opacity:
         "analysis_id": analysis_id,
         "spill_percentage": spill_pct,
         "overlay_image": base64.b64encode(overlay_data).decode("utf-8"),
+        "predicted_mask": base64.b64encode(heat_data).decode("utf-8") if heat_data else None,
+        "binary_mask": base64.b64encode(binary_data).decode("utf-8") if binary_data else None,
+        "contours_overlay": base64.b64encode(contours_data).decode("utf-8") if contours_data else None,
         "original_filename": file.filename,
     }
 

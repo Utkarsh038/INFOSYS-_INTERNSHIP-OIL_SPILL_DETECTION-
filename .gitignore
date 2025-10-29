@@ -4,6 +4,7 @@ venv/
 env/
 ENV/
 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -47,6 +48,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Ignore the Streamlit plan text file that starts with a '#' character
+\# Streamlit Application Plan Oil Sp.txt
 
 # pytest
 .pytest_cache/

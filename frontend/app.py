@@ -67,11 +67,18 @@ def safe_rerun():
 # --- Styling / helpers -------------------------------------------------
 CSS = """
 <style>
-.card { background: rgba(255,255,255,0.02); border-radius: 12px; padding: 18px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); margin-bottom: 16px; }
-.hero { display:flex; align-items:center; gap:16px; }
-.hero-logo{ width:64px; height:64px; border-radius:12px; background: linear-gradient(135deg,#06b6d4,#ef4444); display:flex; align-items:center; justify-content:center; font-weight:700; color:white;}
-.hero-title{ font-size:34px; font-weight:700; margin:0; }
+:root{ --card-bg: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); }
+.card { background: var(--card-bg); border-radius: 14px; padding: 22px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); margin-bottom: 18px; border: 1px solid rgba(255,255,255,0.03); }
+.hero { display:flex; align-items:center; gap:18px; }
+.hero-logo{ width:64px; height:64px; border-radius:12px; background: linear-gradient(135deg,#06b6d4,#ef4444); display:flex; align-items:center; justify-content:center; font-weight:700; color:white; font-size:28px }
+.hero-title{ font-size:30px; font-weight:700; margin:0; }
 .hero-sub{ color:#9ca3af; margin-top:4px }
+.card .stButton>button { background: linear-gradient(90deg,#06b6d4,#ef4444) !important; color: white !important; border: none !important; padding: 8px 12px !important; border-radius: 8px !important; }
+.card .stDownloadButton>button { background: #10b981 !important; }
+.card input { background: rgba(255,255,255,0.02); border-radius:8px; }
+.muted { color:#9ca3af }
+/* Style the native Streamlit form element so widgets appear inside a card */
+form[data-testid="stForm"] { background: var(--card-bg); border-radius: 14px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); max-width:640px; margin: 12px auto 18px; border: 1px solid rgba(255,255,255,0.03); }
 </style>
 """
 
@@ -79,7 +86,7 @@ CSS = """
 def insert_css_and_hero():
     st.markdown(CSS, unsafe_allow_html=True)
     # small hero area
-    st.markdown('<div class="card"><div class="hero"><div class="hero-logo">🌊</div><div><div class="hero-title">Oil Spill Detection & Segmentation</div><div class="hero-sub">Upload satellite images and detect oil spills with a single click</div></div></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="hero"><div class="hero-logo">🌊</div><div><div class="hero-title">Oil Spill Detection</div><div class="hero-sub">Upload satellite images and detect oil spills with a single click</div></div></div></div>', unsafe_allow_html=True)
 
 
 def load_lottie_url(url: str):
@@ -100,28 +107,32 @@ def ensure_api_reachable():
 
 
 def signup_flow():
-    st.header("Sign Up")
-    username = st.text_input("Choose a Username", key="su_user")
-    password = st.text_input("Choose a Password", type="password", key="su_pass")
-    if st.button("Sign Up"):
+    st.markdown("### Sign Up")
+    with st.form(key="signup_form"):
+        username = st.text_input("Choose a Username", key="su_user")
+        password = st.text_input("Choose a Password", type="password", key="su_pass")
+        submitted = st.form_submit_button("Sign Up")
+    if submitted:
         if not username or not password:
             st.warning("Provide username and password")
-            return
-        try:
-            resp = requests.post(f"{API_URL}/signup", data={"username": username, "password": password}, timeout=10)
-            if resp.status_code == 200:
-                st.success("Sign up successful — you can now login")
-            else:
-                st.error(f"Sign up failed: {resp.text}")
-        except Exception as e:
-            st.error(f"Sign up error: {e}")
+        else:
+            try:
+                resp = requests.post(f"{API_URL}/signup", data={"username": username, "password": password}, timeout=10)
+                if resp.status_code == 200:
+                    st.success("Sign up successful — you can now login")
+                else:
+                    st.error(f"Sign up failed: {resp.text}")
+            except Exception as e:
+                st.error(f"Sign up error: {e}")
 
 
 def login_flow():
-    st.header("Login")
-    username = st.text_input("Username", key="li_user")
-    password = st.text_input("Password", type="password", key="li_pass")
-    if st.button("Login"):
+    st.markdown("### Login")
+    with st.form(key="login_form"):
+        username = st.text_input("Username", key="li_user")
+        password = st.text_input("Password", type="password", key="li_pass")
+        submitted = st.form_submit_button("Login")
+    if submitted:
         try:
             resp = requests.post(f"{API_URL}/login", data={"username": username, "password": password}, timeout=10)
             if resp.status_code == 200:
@@ -156,7 +167,7 @@ def image_analyzer_page():
     if uploaded is not None:
         image = Image.open(uploaded)
         col1.header("Original Image")
-        col1.image(image, use_column_width=True)
+        col1.image(image, use_container_width=True)
 
         # show an animated loader (decorative) while analysis runs
         lottie_busy = load_lottie_url("https://assets7.lottiefiles.com/packages/lf20_j1adxtyb.json")
@@ -177,20 +188,50 @@ def image_analyzer_page():
                     return
                 j = resp.json()
                 spill_pct = j.get("spill_percentage", 0.0)
+                # required overlay
                 overlay_b64 = j.get("overlay_image")
-                overlay_bytes = base64.b64decode(overlay_b64)
-                overlay_pil = Image.open(io.BytesIO(overlay_bytes))
+                overlay_bytes = base64.b64decode(overlay_b64) if overlay_b64 else None
+                overlay_pil = Image.open(io.BytesIO(overlay_bytes)) if overlay_bytes else None
+
+                # optional extras
+                pred_b64 = j.get("predicted_mask")
+                bin_b64 = j.get("binary_mask")
+                cont_b64 = j.get("contours_overlay")
+                pred_bytes = base64.b64decode(pred_b64) if pred_b64 else None
+                bin_bytes = base64.b64decode(bin_b64) if bin_b64 else None
+                cont_bytes = base64.b64decode(cont_b64) if cont_b64 else None
+                pred_pil = Image.open(io.BytesIO(pred_bytes)) if pred_bytes else None
+                bin_pil = Image.open(io.BytesIO(bin_bytes)) if bin_bytes else None
+                cont_pil = Image.open(io.BytesIO(cont_bytes)) if cont_bytes else None
             except Exception as e:
                 st.error(f"Analyze request failed: {e}")
                 return
+        # Build a list of available outputs to display (label, PIL image, raw bytes)
+        outputs = [
+            ("Original", image, uploaded.getvalue()),
+        ]
+        if pred_pil:
+            outputs.append(("Predicted Mask", pred_pil, pred_bytes))
+        if bin_pil:
+            outputs.append(("Binary Mask", bin_pil, bin_bytes))
+        if overlay_pil:
+            outputs.append(("Prediction Overlay", overlay_pil, overlay_bytes))
+        if cont_pil:
+            outputs.append(("Contours Overlay", cont_pil, cont_bytes))
 
-        col2.header("Prediction Overlay")
-        # interactive comparison slider (left original, right overlay)
-        try:
-            image_comparison(img1=image, img2=overlay_pil, label1="Original", label2="Overlay", width=650)
-        except Exception:
-            # fallback to static image
-            col2.image(overlay_pil, use_column_width=True)
+        st.subheader("Analysis Outputs")
+        if outputs:
+            cols = st.columns(len(outputs))
+            for i, (label, pil_img, raw_bytes) in enumerate(outputs):
+                with cols[i]:
+                    st.markdown(f"**{label}**")
+                    try:
+                        st.image(pil_img, use_container_width=True)
+                    except Exception:
+                        # fallback if pillow Image isn't directly renderable
+                        st.image(Image.open(io.BytesIO(raw_bytes)), use_container_width=True)
+                    # single report download (do nothing here; handled below)
+                    pass
 
         st.subheader("Analysis Results")
         st.metric("Spill Coverage", f"{spill_pct:.2f}%")
@@ -199,8 +240,10 @@ def image_analyzer_page():
         else:
             st.info("No spill detected")
 
-        # Download overlay
-        st.download_button("Download overlay", data=io.BytesIO(overlay_bytes), file_name="overlay.png", mime="image/png")
+        # Single downloadable PDF report containing all available outputs
+        pdf_bytes = create_pdf_report(original_bytes=uploaded.getvalue(), overlay_bytes=overlay_bytes if overlay_bytes else None,
+                                      spill_pct=spill_pct, predicted_bytes=pred_bytes, binary_bytes=bin_bytes, contours_bytes=cont_bytes)
+        st.download_button("Download Analysis Report (PDF)", data=io.BytesIO(pdf_bytes), file_name="analysis_report.pdf", mime="application/pdf")
     else:
         st.info("Upload an image to analyze")
 
@@ -237,7 +280,7 @@ def past_results_page():
         with col:
             st.markdown("<div class='card'>", unsafe_allow_html=True)
             st.markdown(f"**{ts}**")
-            st.image(Image.open(io.BytesIO(orig_b)), use_column_width=True)
+            st.image(Image.open(io.BytesIO(orig_b)), use_container_width=True)
             st.markdown(f"**Spill:** {pct:.2f}%")
             c1, c2, c3 = st.columns([1,1,1])
             # View (expander) button
@@ -265,45 +308,73 @@ def past_results_page():
             st.markdown("</div>", unsafe_allow_html=True)
 
 
-def create_pdf_report(original_bytes: bytes, overlay_bytes: bytes, spill_pct: float) -> bytes:
+def create_pdf_report(original_bytes: bytes, overlay_bytes: bytes, spill_pct: float,
+                      predicted_bytes: bytes = None, binary_bytes: bytes = None, contours_bytes: bytes = None) -> bytes:
+    """Create a multi-page PDF report embedding all available images.
+
+    Each provided image will get its own page with a caption. Returns PDF bytes.
+    """
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
     width, height = letter
 
-    # Title
+    # Title page
     c.setFont("Helvetica-Bold", 18)
     c.drawString(40, height - 40, "Oil Spill Analysis Report")
     c.setFont("Helvetica", 12)
     c.drawString(40, height - 60, f"Spill Coverage: {spill_pct:.2f}%")
     c.drawString(40, height - 80, f"Generated: ")
-
-    # Images
-    try:
-        orig_img = ImageReader(io.BytesIO(original_bytes))
-        over_img = ImageReader(io.BytesIO(overlay_bytes))
-        img_w = 260
-        img_h = 260
-        c.drawImage(orig_img, 40, height - 120 - img_h, width=img_w, height=img_h)
-        c.drawImage(over_img, 320, height - 120 - img_h, width=img_w, height=img_h)
-    except Exception:
-        # If images fail to embed, ignore
-        pass
-
     c.showPage()
+
+    def _draw_image_page(title: str, img_bytes: bytes):
+        try:
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(40, height - 40, title)
+            img = ImageReader(io.BytesIO(img_bytes))
+            # Fit image inside margins
+            margin = 40
+            max_w = width - margin * 2
+            max_h = height - 120
+            iw, ih = img.getSize()
+            scale = min(max_w / iw, max_h / ih, 1.0)
+            draw_w = iw * scale
+            draw_h = ih * scale
+            x = (width - draw_w) / 2
+            y = (height - draw_h) / 2 - 20
+            c.drawImage(img, x, y, width=draw_w, height=draw_h)
+        except Exception:
+            c.setFont("Helvetica", 12)
+            c.drawString(40, height - 80, "(Failed to embed image)")
+        c.showPage()
+
+    # Add pages for each available image
+    pages = [
+        ("Original Image", original_bytes),
+        ("Predicted Mask (heatmap)", predicted_bytes),
+        ("Binary Mask", binary_bytes),
+        ("Prediction Overlay", overlay_bytes),
+        ("Contours Overlay", contours_bytes),
+    ]
+    for title, b in pages:
+        if b:
+            _draw_image_page(title, b)
+
     c.save()
     buf.seek(0)
     return buf.getvalue()
 
 
 def main():
-    st.set_page_config(page_title="Oil Spill Detection & Segmentation", layout="wide")
+    st.set_page_config(page_title="Oil Spill Detection", layout="wide")
     ensure_api_reachable()
 
     if "logged_in" not in st.session_state:
         st.session_state["logged_in"] = False
 
     if not st.session_state.get("logged_in"):
-        st.title("🌊 Oil Spill Detection & Segmentation")
+        # show a polished hero + styled auth forms
+        insert_css_and_hero()
+        st.markdown("\n")
         tabs = st.tabs(["Login", "Sign Up"])
         with tabs[0]:
             login_flow()
