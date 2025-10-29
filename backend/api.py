@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from dotenv import load_dotenv
@@ -23,6 +24,16 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
 app = FastAPI(title="Oil Spill Detection API")
+# Enable CORS so the Streamlit frontend (hosted remotely) can call this API.
+# For testing we allow all origins; for production, replace ["*"] with a list
+# containing only trusted origins (e.g. your Streamlit app domain).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 

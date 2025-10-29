@@ -4,7 +4,13 @@ import io
 import os
 import requests
 import base64
-from streamlit_lottie import st_lottie
+# streamlit-lottie is optional in some deploy environments; fall back gracefully
+try:
+    from streamlit_lottie import st_lottie  # type: ignore
+except Exception:
+    def st_lottie(*args, **kwargs):
+        # no-op fallback so the app doesn't crash when the package isn't installed
+        return None
 from streamlit_image_comparison import image_comparison
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas

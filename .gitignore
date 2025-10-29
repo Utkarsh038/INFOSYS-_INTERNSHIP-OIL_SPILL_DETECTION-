@@ -24,7 +24,7 @@ dist/
 .env.*
 
 # Model files and large binaries
-*.h5
+
 *.hdf5
 *.ckpt
 *.pth

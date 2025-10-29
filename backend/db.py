@@ -15,7 +15,25 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL not set in environment (.env)")
 
-engine = create_engine(DATABASE_URL, echo=False)
+# Many hosted Postgres databases require SSL and will close plain TCP connections.
+# Configure the engine to use SSL for non-local databases and enable pool_pre_ping
+# so SQLAlchemy checks connections before using them (avoids "SSL connection has been
+# closed unexpectedly" when the server has closed an idle connection).
+connect_args = {}
+lower_db = DATABASE_URL.lower()
+# If the URL points to localhost, avoid forcing SSL. Otherwise request SSL.
+if not ("localhost" in lower_db or "127.0.0.1" in lower_db or lower_db.startswith("postgresql+psycopg2://localhost") ):
+    connect_args = {"sslmode": "require"}
+
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    connect_args=connect_args,
+    # tune the pool for lightweight apps; adjust if you see pool timeouts
+    pool_size=5,
+    max_overflow=10,
+)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
